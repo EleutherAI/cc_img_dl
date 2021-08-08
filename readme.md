@@ -8,6 +8,8 @@ Make sure you have rust installed - if you don't already, run:
 
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+exec $SHELL
 ```
 
 you may also need to install pkg-config and libssl-dev:
