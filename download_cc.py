@@ -15,7 +15,7 @@ def parse_args():
     )
     parser.add_argument("host", type=str, help="host to download blocks from")
     parser.add_argument("--port", type=str, default="5000")
-    parser.add_argument("--processes", type=str, default=None)
+    parser.add_argument("--processes", type=int, default=None)
     parser.add_argument("--warc_urls_path", type=str, default="./warc_urls.txt")
     parser.add_argument("--out_dir", type=str, default="./output")
     args = parser.parse_args()

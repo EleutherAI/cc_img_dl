@@ -1,6 +1,6 @@
 import requests
-import os
 import shortuuid
+import socket
 
 
 class API:
@@ -19,7 +19,11 @@ class API:
     def worker_id(self):
         if self.WORKER_ID is None:
             # set worker id
-            self.WORKER_ID = f"{os.getlogin()}-{shortuuid.uuid()}"
+            try:
+                usr = socket.gethostname()
+            except:
+                usr = "unkown"
+            self.WORKER_ID = f"{usr}-{shortuuid.uuid()}"
         return self.WORKER_ID
 
     def get_available_block(self):
