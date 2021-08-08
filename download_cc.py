@@ -1,45 +1,91 @@
 import subprocess
 import multiprocessing
-from multiprocessing import set_start_method
+from multiprocessing import set_start_method, Value
 from functools import partial
-from tqdm import tqdm
-
-import sys
+import api
 import pathlib
+import time
+import argparse
+import traceback
+
+COUNTER = Value("i", 0)
 
 
-def process_wat(url, output_path):
-    if not url.strip():
-        return url
-
-    output_name = url.split("/")[3] + "_" + url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
-    dir_name = url.split("/")[1]
-
-    pathlib.Path(f"{output_path}/{dir_name}/").mkdir(parents=True, exist_ok=True)
-
+def process_wats(output_path, debug=True):
+    global COUNTER
     while True:
-        try:
-            subprocess.run(["./commoncrawl_filter_bin", "http://commoncrawl.s3.amazonaws.com/" + url, f"{output_path}/{dir_name}/{output_name}".strip()], timeout=1200, check=True)
+        print(
+            f"\rNum blocks processed locally: {COUNTER.value} | Global Progress: {api.get_global_progress()}",
+            end="",
+        )
+        response = api.get_available_block()
+        if "message" in response:
+            print(response["message"])
+            print(f"No more free blocks?")
             break
-        except:
-            pass
+        block_id = response["uuid"]
+        block_url = response["url"]
+        try:
+            api.mark_block_in_progress(block_id)
+            if not block_url.strip():
+                return block_url
 
-    return url
+            output_name = (
+                block_url.split("/")[3]
+                + "_"
+                + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
+            )
+            dir_name = block_url.split("/")[1]
+
+            pathlib.Path(f"{output_path}/{dir_name}/").mkdir(
+                parents=True, exist_ok=True
+            )
+            if debug:
+                time.sleep(5)
+            else:
+                subprocess.run(
+                    [
+                        "./commoncrawl_filter_bin",
+                        "http://commoncrawl.s3.amazonaws.com/" + url,
+                        f"{output_path}/{dir_name}/{output_name}".strip(),
+                    ],
+                    timeout=1200,
+                    check=True,
+                )
+            api.mark_block_complete(block_id)
+            COUNTER.value += 1
+        except Exception as e:
+            print(f"Error processing block {block_id}")
+            api.mark_block_failed(block_id)
+            traceback.print_exc()
+            break
 
 
-if __name__=="__main__":
-    set_start_method("spawn")
+def parse_args():
+    parser = argparse.ArgumentParser(
+        "Download common crawl blocks & parse out CC licensed images"
+    )
+    parser.add_argument("--processes", type=str, default=None)
+    parser.add_argument("--warc_urls_path", type=str, default="./warc_urls.txt")
+    parser.add_argument("--out_dir", type=str, default="./output")
+    args = parser.parse_args()
+    if args.processes is None:
+        print("cpu count:", multiprocessing.cpu_count())
+        args.processes = multiprocessing.cpu_count()
+    return args
 
-    assert len(sys.argv) == 4
 
-    f = open(sys.argv[2])
-    total = len(f.readlines())
-    f.seek(0)
-
-    p = multiprocessing.Pool(int(sys.argv[1]))
-    process = partial(process_wat, output_path=sys.argv[3])
-
-    with open('progress.txt', 'a+') as o_f:
-        for i in tqdm(p.imap(process, f), total=total):
-            o_f.write(i)
-            o_f.flush()
+if __name__ == "__main__":
+    args = parse_args()
+    p = multiprocessing.Pool(args.processes)
+    process = partial(process_wats, output_path=args.out_dir)
+    total_blocks = api.get_block_count()
+    try:
+        for _ in range(args.processes):
+            p.apply_async(process)
+            # stagger the processes
+            time.sleep(1)
+    finally:
+        # wait for all processes to complete
+        p.close()
+        p.join()
