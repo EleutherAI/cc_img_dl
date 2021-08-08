@@ -9,7 +9,6 @@ import argparse
 import traceback
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser(
         "Download common crawl blocks & parse out CC licensed images"
@@ -72,7 +71,7 @@ def process_wats(output_path, debug=False):
                 )
             API.mark_block_complete(block_id)
             COUNTER.value += 1
-        except Exception as e:
+        except BaseException as e:
             print(e)
             print(f"Error processing block {block_id}")
             API.mark_block_failed(block_id)
