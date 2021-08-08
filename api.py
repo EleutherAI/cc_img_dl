@@ -1,8 +1,14 @@
 import requests
 import os
 import shortuuid
+import argparse
 
-BASE = "http://127.0.0.1:8000"
+parser = argparse.ArgumentParser(description="CC img downloader API")
+parser.add_argument("--host", type=str, default="http://127.0.0.1")
+parser.add_argument("--port", default="5000")
+args = parser.parse_args()
+
+BASE = f"{args.host}:{args.port}"
 GET_BLOCK = f"{BASE}/blocks/get"
 GET_BLOCK_COUNT = f"{BASE}/blocks/count"
 GLOBAL_PROGRESS = f"{BASE}/blocks/progress"
@@ -21,7 +27,7 @@ def worker_id():
 
 
 def get_available_block():
-    response = requests.get(GET_BLOCK)
+    response = requests.get(f"{GET_BLOCK}/?worker_id={worker_id()}")
     return response.json()
 
 

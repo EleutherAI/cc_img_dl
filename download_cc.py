@@ -11,7 +11,7 @@ import traceback
 COUNTER = Value("i", 0)
 
 
-def process_wats(output_path, debug=True):
+def process_wats(output_path, debug=False):
     global COUNTER
     while True:
         print(
@@ -20,29 +20,28 @@ def process_wats(output_path, debug=True):
         )
         response = api.get_available_block()
         if "message" in response:
+            print("\n")
             print(response["message"])
-            print(f"No more free blocks?")
             break
         block_id = response["uuid"]
         block_url = response["url"]
         try:
-            api.mark_block_in_progress(block_id)
             if not block_url.strip():
                 return block_url
 
-            output_name = (
-                block_url.split("/")[3]
-                + "_"
-                + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
-            )
-            dir_name = block_url.split("/")[1]
-
-            pathlib.Path(f"{output_path}/{dir_name}/").mkdir(
-                parents=True, exist_ok=True
-            )
             if debug:
                 time.sleep(5)
             else:
+                output_name = (
+                    block_url.split("/")[3]
+                    + "_"
+                    + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
+                )
+                dir_name = block_url.split("/")[1]
+
+                pathlib.Path(f"{output_path}/{dir_name}/").mkdir(
+                    parents=True, exist_ok=True
+                )
                 subprocess.run(
                     [
                         "./commoncrawl_filter_bin",
@@ -55,6 +54,7 @@ def process_wats(output_path, debug=True):
             api.mark_block_complete(block_id)
             COUNTER.value += 1
         except Exception as e:
+            print(e)
             print(f"Error processing block {block_id}")
             api.mark_block_failed(block_id)
             traceback.print_exc()
@@ -70,7 +70,6 @@ def parse_args():
     parser.add_argument("--out_dir", type=str, default="./output")
     args = parser.parse_args()
     if args.processes is None:
-        print("cpu count:", multiprocessing.cpu_count())
         args.processes = multiprocessing.cpu_count()
     return args
 

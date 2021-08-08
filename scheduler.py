@@ -4,10 +4,14 @@ import os
 from download_warc_urls import WARC_URLS_PATH
 import pandas as pd
 import shortuuid
-from threading import Thread
+from threading import Thread, Lock
 import random
+import uvicorn
+from tables.exceptions import HDF5ExtError
+from functools import partial
 
 app = FastAPI()
+lock = Lock()
 
 # Enum class describing the status of a block
 class BlockStatus(int, Enum):
@@ -19,12 +23,17 @@ class BlockStatus(int, Enum):
 
 # if file exists, resume from db
 if os.path.isfile("blocks.h5"):
-    BLOCKS = pd.read_hdf("blocks.h5", key="df")
+    try:
+        BLOCKS = pd.read_hdf("blocks.h5", key="df")
+    except:
+        print("failed to read blocks.h5")
+        exit(1)
 else:
     if not os.path.exists(WARC_URLS_PATH):
         print("No warc urls found - run download_warc_urls.py")
-        # exit(1)
-        BLOCK_URLS = list([f"block_{i}" for i in range(100)])
+        exit(1)
+        # for debugging:
+        # BLOCK_URLS = list([f"block_{i}" for i in range(300)])
     else:
         with open(WARC_URLS_PATH, "r") as f:
             BLOCK_URLS = list(f.readlines())
@@ -43,15 +52,17 @@ GLOBAL_PROGRESS = int((BLOCKS.status.values == BlockStatus.COMPLETED).sum())
 print(f"global progress = {GLOBAL_PROGRESS}")
 
 
-def _save_progress():
-    try:
-        BLOCKS.to_hdf("blocks.h5", key="df", mode="w")
-    except ValueError:
-        print(f"save failed - might already be saving in another thread")
+def _save_progress(pth="./blocks.h5"):
+    with lock:
+        try:
+            BLOCKS.to_hdf(pth, key="df", mode="w")
+        except (HDF5ExtError, ValueError):
+            print(f"save failed")
 
 
-def save_progress():
-    Thread(target=_save_progress).start()
+def save_progress(pth="./blocks.h5"):
+    fn = partial(_save_progress, pth)
+    Thread(target=fn).start()
 
 
 def get_idx_by_id(block_id):
@@ -60,7 +71,7 @@ def get_idx_by_id(block_id):
 
 # get an available block
 @app.get("/blocks/get")
-async def get_block():
+async def get_block(worker_id: str):
     # get first index where status is AVAILABLE or FAILED
     cond = (BLOCKS.status == BlockStatus.AVAILABLE) | (
         BLOCKS.status == BlockStatus.FAILED
@@ -69,9 +80,13 @@ async def get_block():
     n_available = len(available)
     if n_available > 0:
         # pick a random index
-        idx = random.randint(0, n_available - 1)
+        idx = available[random.randint(0, n_available - 1)]
         url = BLOCKS.loc[idx, "url"]
         uuid = BLOCKS.loc[idx, "uuid"]
+        # mark block as in progress
+        BLOCKS.at[idx, "status"] = BlockStatus.IN_PROGRESS
+        BLOCKS.at[idx, "worker_id"] = worker_id
+        # return data
         return {"url": url, "uuid": uuid}
     # if no blocks are available, return an error
     return {"message": "No blocks available"}
@@ -86,7 +101,7 @@ async def get_block_count():
 # get global progress
 @app.get("/blocks/progress")
 async def get_progress():
-    print(GLOBAL_PROGRESS, type(GLOBAL_PROGRESS))
+    print(f"Global Progress: {GLOBAL_PROGRESS}")
     return {"progress": GLOBAL_PROGRESS}
 
 
@@ -111,9 +126,10 @@ async def mark_block_completed(block_id: str):
     except:
         return {"message": f"Block {block_id} not found"}
     BLOCKS.at[idx, "status"] = BlockStatus.COMPLETED
-    # save out blocks to disk
-    save_progress()
     GLOBAL_PROGRESS += 1
+    # save out blocks to disk every so often
+    if GLOBAL_PROGRESS % 100 == 0:
+        save_progress()
     return {"message": "success"}
 
 
@@ -126,4 +142,9 @@ async def mark_block_failed(block_id: str):
         return {"message": f"Block {block_id} not found"}
     BLOCKS.at[idx, "status"] = BlockStatus.COMPLETED
     return {"message": "success"}
+
+
+if __name__ == "__main__":
+    # run uvicorn app
+    uvicorn.run("scheduler:app", host="127.0.0.1", port=5000, log_level="info")
 
