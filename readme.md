@@ -4,8 +4,27 @@ A script for extracting URLs/license information from CommonCrawl WATs and downl
 
 # Compile instructions
 
+Make sure you have rust installed - if you don't already, run:
+
+```shell
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
 To compile the rust components (`commoncrawl_filter` and `img_dl`), run `./compile.sh` when in the root of the repo.
 
+# Run scheduler
+
+The downloading is designed to be distributed across multiple machines - there's one scheduler which distributes the unprocessed CC blocks to the workers, which then run the processing steps.
+
+To run the scheduler, first run `python download_warc_urls.py` to get all the available CC urls.
+
+Then run `python scheduler.py` which will setup the scheduler on port 5000 of the local machine
+
+Then, when running download_cc.py make sure to pass in the scheduler's url as the first argument. e.g:
+
+```shell
+python download_cc.py http://127.0.0.1 
+```
 # Run instructions
 
 Note all estimates are very rough, could easily be off by a factor of 2 (but should be the right OOM at least...)
