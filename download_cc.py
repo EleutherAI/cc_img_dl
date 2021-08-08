@@ -63,7 +63,7 @@ def process_wats(output_path, debug=False):
                 subprocess.run(
                     [
                         "./commoncrawl_filter_bin",
-                        "http://commoncrawl.s3.amazonaws.com/" + url,
+                        block_url,
                         f"{output_path}/{dir_name}/{output_name}".strip(),
                     ],
                     timeout=1200,
