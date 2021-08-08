@@ -10,7 +10,13 @@ Make sure you have rust installed - if you don't already, run:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-To compile the rust components (`commoncrawl_filter` and `img_dl`), run `./compile.sh` when in the root of the repo.
+you may also need to install pkg-config and libssl-dev:
+
+```shell
+sudo apt-get install pkg-config libssl-dev -y
+```
+
+Finally, to compile the rust components (`commoncrawl_filter` and `img_dl`), run `./compile.sh` when in the root of the repo.
 
 # Run instructions (distributed)
 
