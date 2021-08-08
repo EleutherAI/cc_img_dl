@@ -35,7 +35,7 @@ Then run `python3 scheduler.py` which will setup the scheduler on port 5000 of t
 Then, when running download_cc.py on other machines, make sure to pass in the scheduler's url as the first argument. e.g:
 
 ```shell
-python3 download_cc.py http://127.0.0.1 out_dir
+python3 download_cc.py http://127.0.0.1 --out_dir out_dir
 ```
 
 # Run instructions (single machine)

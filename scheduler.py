@@ -141,7 +141,7 @@ async def mark_block_completed(block_id: str):
     BLOCKS.at[idx, "status"] = BlockStatus.COMPLETED
     GLOBAL_PROGRESS += 1
     # save out blocks to disk every so often
-    if GLOBAL_PROGRESS % 100 == 0:
+    if GLOBAL_PROGRESS % 1000 == 0:
         save_progress()
     return {"message": "success"}
 
