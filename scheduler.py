@@ -12,6 +12,9 @@ from functools import partial
 
 app = FastAPI()
 lock = Lock()
+BLOCKS = None
+GLOBAL_PROGRESS = 0
+
 
 # Enum class describing the status of a block
 class BlockStatus(int, Enum):
@@ -21,35 +24,39 @@ class BlockStatus(int, Enum):
     FAILED = 3
 
 
-# if file exists, resume from db
-if os.path.isfile("blocks.h5"):
-    try:
-        BLOCKS = pd.read_hdf("blocks.h5", key="df")
-    except:
-        print("failed to read blocks.h5")
-        exit(1)
-else:
-    if not os.path.exists(WARC_URLS_PATH):
-        print("No warc urls found - run download_warc_urls.py")
-        exit(1)
-        # for debugging:
-        # BLOCK_URLS = list([f"block_{i}" for i in range(300)])
+@app.on_event("startup")
+async def startup():
+    global BLOCKS
+    global GLOBAL_PROGRESS
+    # if file exists, resume from db
+    if os.path.isfile("blocks.h5"):
+        try:
+            BLOCKS = pd.read_hdf("blocks.h5", key="df")
+        except:
+            print("failed to read blocks.h5")
+            exit(1)
     else:
-        with open(WARC_URLS_PATH, "r") as f:
-            BLOCK_URLS = list(f.readlines())
-        print(f"{len(BLOCK_URLS)} block urls loaded")
-    BLOCKS = pd.DataFrame(
-        {
-            "url": BLOCK_URLS,
-            "uuid": [shortuuid.uuid() for _ in range(len(BLOCK_URLS))],
-            "status": [BlockStatus(0) for _ in range(len(BLOCK_URLS))],
-            "worker_id": ["N/A" for _ in range(len(BLOCK_URLS))],
-        }
-    )
+        if not os.path.exists(WARC_URLS_PATH):
+            print("No warc urls found - run download_warc_urls.py")
+            exit(1)
+            # for debugging:
+            # BLOCK_URLS = list([f"block_{i}" for i in range(300)])
+        else:
+            with open(WARC_URLS_PATH, "r") as f:
+                BLOCK_URLS = list(f.readlines())
+            print(f"{len(BLOCK_URLS)} block urls loaded")
+        BLOCKS = pd.DataFrame(
+            {
+                "url": BLOCK_URLS,
+                "uuid": [shortuuid.uuid() for _ in range(len(BLOCK_URLS))],
+                "status": [BlockStatus(0) for _ in range(len(BLOCK_URLS))],
+                "worker_id": ["N/A" for _ in range(len(BLOCK_URLS))],
+            }
+        )
 
-print(f"{len(BLOCKS)} blocks loaded")
-GLOBAL_PROGRESS = int((BLOCKS.status.values == BlockStatus.COMPLETED).sum())
-print(f"global progress = {GLOBAL_PROGRESS}")
+    print(f"{len(BLOCKS)} blocks loaded")
+    GLOBAL_PROGRESS = int((BLOCKS.status.values == BlockStatus.COMPLETED).sum())
+    print(f"global progress = {GLOBAL_PROGRESS}")
 
 
 def _save_progress(pth="./blocks.h5"):
@@ -63,6 +70,12 @@ def _save_progress(pth="./blocks.h5"):
 def save_progress(pth="./blocks.h5"):
     fn = partial(_save_progress, pth)
     Thread(target=fn).start()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    print("saving progress")
+    save_progress()
 
 
 def get_idx_by_id(block_id):
@@ -146,5 +159,5 @@ async def mark_block_failed(block_id: str):
 
 if __name__ == "__main__":
     # run uvicorn app
-    uvicorn.run("scheduler:app", host="127.0.0.1", port=5000, log_level="info")
+    uvicorn.run("scheduler:app", host="0.0.0.0", port=5000, log_level="info")
 
