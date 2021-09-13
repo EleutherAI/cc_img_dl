@@ -52,13 +52,26 @@ def _mark_failed(block_id, max_retries=5):
         # retry
         if max_retries > 0:
             time.sleep(1)
-            _mark_complete(block_id, max_retries - 1)
+            _mark_failed(block_id, max_retries - 1)
         else:
             print(f"Failed to mark block {block_id} failed")
             return
 
 
-def _process_wat(block_id, block_url, out_dir):
+def mark_complete(block_id, max_retries=5):
+    # can be a single block id or a list of block ids
+    thr = threading.Thread(target=_mark_complete, args=(block_id, max_retries))
+    thr.start()
+
+
+def mark_failed(block_id, max_retries=5):
+    # can be a single block id or a list of block ids
+    thr = threading.Thread(target=_mark_failed, args=(block_id, max_retries))
+    thr.start()
+
+
+def _process_wat(args, out_dir):
+    block_id, block_url = args
     try:
         if not block_url.strip():
             return block_url
@@ -82,18 +95,12 @@ def _process_wat(block_id, block_url, out_dir):
             check=True,
         )
         print(f"Finished processing block {block_id} in {time.time() - start} seconds")
-        start = time.time()
-        thr = threading.Thread(target=_mark_complete, args=(block_id,))
-        thr.start()
-        print(f"Marked block {block_id} complete in {time.time() - start} seconds")
+        return 0
     except BaseException as e:
         print(e)
         print(f"Error processing block {block_id}")
-        start = time.time()
-        thr = threading.Thread(target=_mark_failed, args=(block_id,))
-        thr.start()
-        print(f"Marked block {block_id} failed in {time.time() - start} seconds")
         traceback.print_exc()
+        return 1
 
 
 def process_wats(output_path, processes):
@@ -115,11 +122,24 @@ def process_wats(output_path, processes):
                         print("Sleeping and trying again in 10 seconds")
                         time.sleep(10)
                 print(f"GOT {len(blocks)} BLOCKS")
-                for block in blocks:
-                    p.apply_async(
-                        _process_wat, args=(block["uuid"], block["url"], output_path)
-                    )
-                    time.sleep(1)
+                results = p.map(
+                    partial(_process_wat, out_dir=output_path),
+                    [(block["uuid"], block["url"],) for block in blocks],
+                )
+                COUNTER += sum(results)
+                print(f"\rNum blocks processed locally: {COUNTER}", end="")
+                # mark completed blocks complete and failed blocks failed
+                completed = []
+                failed = []
+                for block, result in zip(blocks, results):
+                    if result == 1:
+                        failed.append(block["uuid"])
+                    else:
+                        completed.append(block["uuid"])
+                if completed:
+                    mark_complete(",".join(completed))
+                if failed:
+                    mark_failed(",".join(failed))
         except NoAvailableBlocks:
             print("No more blocks!")
         except Exception as e:

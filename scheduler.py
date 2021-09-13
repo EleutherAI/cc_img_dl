@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from fastapi import FastAPI
 import os
 from download_warc_urls import WARC_URLS_PATH
@@ -42,10 +42,10 @@ async def shutdown():
 
 # get an available block (or N)
 @app.get("/blocks/get")
-async def get_blocks(worker_id: str, n: Optional[int] = 1):
+async def get_blocks(worker_id: str, n: Optional[int] = 1) -> List[dict]:
     # get first index where status is AVAILABLE or FAILED
     try:
-        blocks = DATABASE.get_available_blocks(n)
+        blocks = DATABASE.get_available_blocks(n, worker_id=worker_id)
     except IndexError as e:
         print(e)
         return {"message": "no blocks available"}
@@ -60,7 +60,7 @@ async def get_blocks(worker_id: str, n: Optional[int] = 1):
 
 # get total number of blocks
 @app.get("/blocks/count")
-async def get_block_count():
+async def get_block_count() -> int:
     try:
         return {"count": len(DATABASE)}
     except sqlite3.OperationalError as e:
@@ -70,7 +70,7 @@ async def get_block_count():
 
 # get global progress
 @app.get("/blocks/progress")
-async def get_progress():
+async def get_progress() -> int:
     global GLOBAL_PROGRESS
     try:
         GLOBAL_PROGRESS = DATABASE.get_progress()
@@ -85,7 +85,14 @@ async def get_progress():
 @app.put("/blocks/in_progress/{block_id}")
 async def mark_block_in_progress(block_id: str, worker_id: str):
     try:
-        DATABASE.update_status(block_id, int(BlockStatus.IN_PROGRESS), worker_id)
+        if "," in block_id:
+            block_ids = block_id.split(",")
+            print(f"Marking {len(block_ids)} blocks as in progress")
+
+            # we've received a list of block ids
+            DATABASE.update_multiple(block_ids, int(BlockStatus.IN_PROGRESS), worker_id)
+        else:
+            DATABASE.update_status(block_id, int(BlockStatus.IN_PROGRESS), worker_id)
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
@@ -95,9 +102,15 @@ async def mark_block_in_progress(block_id: str, worker_id: str):
 # mark a block as completed
 @app.put("/blocks/complete/{block_id}")
 async def mark_block_completed(block_id: str):
-    # TODO: what if the block does not exist?
     try:
-        DATABASE.update_status(block_id, int(BlockStatus.COMPLETED))
+        if "," in block_id:
+            block_ids = block_id.split(",")
+            print(f"Marking {len(block_ids)} blocks as complete")
+
+            # we've received a list of block ids
+            DATABASE.update_multiple(block_ids, int(BlockStatus.COMPLETED))
+        else:
+            DATABASE.update_status(block_id, int(BlockStatus.COMPLETED))
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
@@ -108,8 +121,14 @@ async def mark_block_completed(block_id: str):
 @app.put("/blocks/failed/{block_id}")
 async def mark_block_failed(block_id: str):
     try:
-        # TODO: what if the block does not exist?
-        DATABASE.update_status(block_id, int(BlockStatus.FAILED))
+        if "," in block_id:
+            block_ids = block_id.split(",")
+            print(f"Marking {len(block_ids)} blocks as failed")
+
+            # we've received a list of block ids
+            DATABASE.update_multiple(block_ids, int(BlockStatus.FAILED))
+        else:
+            DATABASE.update_status(block_id, int(BlockStatus.FAILED))
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
@@ -133,6 +152,6 @@ async def remove_expired_tokens_task():
 if __name__ == "__main__":
     # run uvicorn app
     uvicorn.run(
-        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=2,
+        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=1,
     )
 

@@ -123,7 +123,7 @@ class DB:
         return cur.fetchone()[0]
 
     @timer
-    def get_available_blocks(self, n=1):
+    def get_available_blocks(self, n=1, worker_id=None):
         """
         Gets a n blocks where status is available (or failed, since it needs to be retried)
         """
@@ -142,7 +142,7 @@ class DB:
         )  # time = time last updated
         # update status to 1 (IN_PROGRESS)
         uuids = [block[1] for block in blocks]
-        self.update_multiple(uuids, 1)
+        self.update_multiple(uuids, 1, worker_id=worker_id)
         return blocks
 
     @timer
