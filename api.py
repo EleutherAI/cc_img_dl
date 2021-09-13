@@ -1,3 +1,4 @@
+import json
 import requests
 import shortuuid
 import socket
@@ -15,6 +16,10 @@ class API:
         self.BLOCK_COMPLETE = f"{BASE}/blocks/complete"
         self.BLOCK_FAILED = f"{BASE}/blocks/failed"
         self.WORKER_ID = None
+        self.headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
 
     def worker_id(self):
         if self.WORKER_ID is None:
@@ -41,17 +46,29 @@ class API:
         return response.json().get("progress", response.json())
 
     def mark_block_in_progress(self, block_id):
+        if isinstance(block_id, str):
+            block_id = block_id.split(",")
         response = requests.put(
-            f"{self.BLOCK_IN_PROGRESS}/{block_id}?worker_id='{self.worker_id()}'"
+            f"{self.BLOCK_IN_PROGRESS}/?worker_id='{self.worker_id()}'",
+            json={"ids": block_id},
+            headers=self.headers,
         )
         return response.json()
 
     def mark_block_complete(self, block_id):
-        response = requests.put(f"{self.BLOCK_COMPLETE}/{block_id}")
+        if isinstance(block_id, str):
+            block_id = block_id.split(",")
+        response = requests.put(
+            f"{self.BLOCK_COMPLETE}/", json={"ids": block_id}, headers=self.headers
+        )
         return response.json()
 
     def mark_block_failed(self, block_id):
-        response = requests.put(f"{self.BLOCK_FAILED}/{block_id}")
+        if isinstance(block_id, str):
+            block_id = block_id.split(",")
+        response = requests.put(
+            f"{self.BLOCK_FAILED}/", json={"ids": block_id}, headers=self.headers
+        )
         return response.json()
 
 
