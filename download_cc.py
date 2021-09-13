@@ -7,6 +7,7 @@ import pathlib
 import time
 import argparse
 import traceback
+import threading
 
 
 def parse_args():
@@ -33,6 +34,30 @@ class NoAvailableBlocks(Exception):
     pass
 
 
+def _mark_complete(block_id, max_retries=5):
+    results = API.mark_block_complete(block_id)
+    if results.get("message", "") == "database error":
+        # retry
+        if max_retries > 0:
+            time.sleep(1)
+            _mark_complete(block_id, max_retries - 1)
+        else:
+            print(f"Failed to mark block {block_id} complete")
+            return
+
+
+def _mark_failed(block_id, max_retries=5):
+    results = API.mark_block_failed(block_id)
+    if results.get("message", "") == "database error":
+        # retry
+        if max_retries > 0:
+            time.sleep(1)
+            _mark_complete(block_id, max_retries - 1)
+        else:
+            print(f"Failed to mark block {block_id} failed")
+            return
+
+
 def _process_wat(block_id, block_url, out_dir):
     try:
         if not block_url.strip():
@@ -46,6 +71,7 @@ def _process_wat(block_id, block_url, out_dir):
         dir_name = block_url.split("/")[1]
 
         pathlib.Path(f"{out_dir}/{dir_name}/").mkdir(parents=True, exist_ok=True)
+        start = time.time()
         subprocess.run(
             [
                 "./commoncrawl_filter_bin",
@@ -55,11 +81,18 @@ def _process_wat(block_id, block_url, out_dir):
             timeout=1200,
             check=True,
         )
-        API.mark_block_complete(block_id)
+        print(f"Finished processing block {block_id} in {time.time() - start} seconds")
+        start = time.time()
+        thr = threading.Thread(target=_mark_complete, args=(block_id,))
+        thr.start()
+        print(f"Marked block {block_id} complete in {time.time() - start} seconds")
     except BaseException as e:
         print(e)
         print(f"Error processing block {block_id}")
-        API.mark_block_failed(block_id)
+        start = time.time()
+        thr = threading.Thread(target=_mark_failed, args=(block_id,))
+        thr.start()
+        print(f"Marked block {block_id} failed in {time.time() - start} seconds")
         traceback.print_exc()
 
 

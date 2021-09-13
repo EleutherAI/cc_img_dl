@@ -133,6 +133,6 @@ async def remove_expired_tokens_task():
 if __name__ == "__main__":
     # run uvicorn app
     uvicorn.run(
-        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=1,
+        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=2,
     )
 
