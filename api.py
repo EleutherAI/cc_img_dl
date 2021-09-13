@@ -27,7 +27,9 @@ class API:
         return self.WORKER_ID
 
     def get_available_blocks(self, n):
-        response = requests.get(f"{self.GET_BLOCK}/?worker_id={self.worker_id()}&n={n}")
+        response = requests.get(
+            f"{self.GET_BLOCK}/?worker_id='{self.worker_id()}'&n={n}"
+        )
         return response.json()
 
     def get_block_count(self):
@@ -40,7 +42,7 @@ class API:
 
     def mark_block_in_progress(self, block_id):
         response = requests.put(
-            f"{self.BLOCK_IN_PROGRESS}/{block_id}?worker_id={self.worker_id()}"
+            f"{self.BLOCK_IN_PROGRESS}/{block_id}?worker_id='{self.worker_id()}'"
         )
         return response.json()
 
