@@ -33,8 +33,7 @@ def process_wats(output_path, debug=False):
     global COUNTER
     while True:
         print(
-            f"\rNum blocks processed locally: {COUNTER.value} | Global Progress: {API.get_global_progress()}",
-            end="",
+            f"\rNum blocks processed locally: {COUNTER.value}", end="",
         )
         response = API.get_available_block()
         if "message" in response:
