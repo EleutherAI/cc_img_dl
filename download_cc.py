@@ -105,7 +105,7 @@ def _process_wat(args, out_dir):
 
 def process_wats(output_path, processes):
     global COUNTER
-    n_blocks = processes * 10
+    n_blocks = processes * 5
     while True:
         try:
             with multiprocessing.Pool(args.processes) as p:
@@ -137,9 +137,9 @@ def process_wats(output_path, processes):
                     else:
                         completed.append(block["uuid"])
                 if completed:
-                    mark_complete(",".join(completed))
+                    mark_complete(completed)
                 if failed:
-                    mark_failed(",".join(failed))
+                    mark_failed(failed)
         except NoAvailableBlocks:
             print("No more blocks!")
         except Exception as e:

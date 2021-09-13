@@ -7,10 +7,15 @@ import uvicorn
 from db import DB
 from fastapi_utils.tasks import repeat_every
 import sqlite3
+from pydantic import BaseModel
 
 app = FastAPI()
 DATABASE = None
 GLOBAL_PROGRESS = 0
+
+
+class BlockIds(BaseModel):
+    ids: List[str]
 
 
 # Enum class describing the status of a block
@@ -82,17 +87,13 @@ async def get_progress() -> int:
 
 
 # mark a block as in progress
-@app.put("/blocks/in_progress/{block_id}")
-async def mark_block_in_progress(block_id: str, worker_id: str):
+@app.put("/blocks/in_progress/")
+async def mark_block_in_progress(block_ids: BlockIds) -> dict:
     try:
-        if "," in block_id:
-            block_ids = block_id.split(",")
-            print(f"Marking {len(block_ids)} blocks as in progress")
-
-            # we've received a list of block ids
-            DATABASE.update_multiple(block_ids, int(BlockStatus.IN_PROGRESS), worker_id)
-        else:
-            DATABASE.update_status(block_id, int(BlockStatus.IN_PROGRESS), worker_id)
+        block_ids = block_ids.ids
+        print(f"Marking {len(block_ids)} blocks as in progress")
+        # we've received a list of block ids
+        DATABASE.update_multiple(block_ids, int(BlockStatus.IN_PROGRESS))
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
@@ -100,17 +101,13 @@ async def mark_block_in_progress(block_id: str, worker_id: str):
 
 
 # mark a block as completed
-@app.put("/blocks/complete/{block_id}")
-async def mark_block_completed(block_id: str):
+@app.put("/blocks/complete/")
+async def mark_block_completed(block_ids: BlockIds) -> dict:
     try:
-        if "," in block_id:
-            block_ids = block_id.split(",")
-            print(f"Marking {len(block_ids)} blocks as complete")
-
-            # we've received a list of block ids
-            DATABASE.update_multiple(block_ids, int(BlockStatus.COMPLETED))
-        else:
-            DATABASE.update_status(block_id, int(BlockStatus.COMPLETED))
+        block_ids = block_ids.ids
+        print(f"Marking {len(block_ids)} blocks as complete")
+        # we've received a list of block ids
+        DATABASE.update_multiple(block_ids, int(BlockStatus.COMPLETED))
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
@@ -118,17 +115,13 @@ async def mark_block_completed(block_id: str):
 
 
 # mark a block as failed
-@app.put("/blocks/failed/{block_id}")
-async def mark_block_failed(block_id: str):
+@app.put("/blocks/failed/")
+async def mark_block_failed(block_ids: BlockIds) -> dict:
     try:
-        if "," in block_id:
-            block_ids = block_id.split(",")
-            print(f"Marking {len(block_ids)} blocks as failed")
-
-            # we've received a list of block ids
-            DATABASE.update_multiple(block_ids, int(BlockStatus.FAILED))
-        else:
-            DATABASE.update_status(block_id, int(BlockStatus.FAILED))
+        block_ids = block_ids.ids
+        print(f"Marking {len(block_ids)} blocks as failed")
+        # we've received a list of block ids
+        DATABASE.update_multiple(block_ids, int(BlockStatus.FAILED))
         return {"message": "success"}
     except sqlite3.OperationalError as e:
         print(e)
