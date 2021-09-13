@@ -33,9 +33,9 @@ class DB:
     def __init__(
         self,
         path="blocks.sql",
-        commit_interval=1,
+        commit_interval=250,
         warc_urls_path="warc_urls.txt",
-        timeout=10.0,
+        timeout=30.0,
     ):
         self.path = path
         self.warc_urls_path = warc_urls_path
@@ -43,6 +43,7 @@ class DB:
         self.create_db()
         self.commit_interval = commit_interval
         self.counter = 0
+        self.len = self.get_n_rows()
 
     def _table_exists(self, table):
         cur = self.con.cursor()
@@ -55,7 +56,7 @@ class DB:
         return pd.Timestamp.now().value // 10 ** 9
 
     def __len__(self):
-        return self.get_n_rows()
+        return self.len
 
     @timer
     def create_db(self):
@@ -97,7 +98,7 @@ class DB:
             self.con.commit()
 
     @timer
-    def update_multiple(self, uuids, status, worker_id=None, commit=False):
+    def update_multiple(self, uuids, status, worker_id=None, commit=True):
         """
         Updates the status of the row with uuid `uuid` to `status`
         """
@@ -128,11 +129,13 @@ class DB:
         """
         cur = self.con.cursor()
         # available is where status is 0 (AVAILABLE) or 3 (FAILED)
+        to_fetch = n * 2
+        random_start = random.randint(0, self.len - to_fetch)
+        # get some blocks starting from random_start
         cur.execute(
-            f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (0, 3)"
+            f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (0, 3) LIMIT {random_start}, {to_fetch}"
         )
         # select many then pick one to avoid overlaps between threads
-        to_fetch = n * 100
         candidates = cur.fetchmany(to_fetch)
         blocks = random.sample(
             candidates, min(len(candidates), n)
