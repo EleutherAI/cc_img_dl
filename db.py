@@ -24,18 +24,22 @@ def timer(func):
             return func(*args, **kwargs)
         finally:
             end_ = time() - start
-            print(f"Total execution time of {func.__name__}: {end_} ms")
+            print(f"Total execution time of {func.__name__}: {end_:.2f} ms")
 
     return _time_it
 
 
 class DB:
     def __init__(
-        self, path="blocks.sql", commit_interval=1, warc_urls_path="warc_urls.txt"
+        self,
+        path="blocks.sql",
+        commit_interval=1,
+        warc_urls_path="warc_urls.txt",
+        timeout=10.0,
     ):
         self.path = path
         self.warc_urls_path = warc_urls_path
-        self.con = sqlite3.connect(self.path)
+        self.con = sqlite3.connect(self.path, timeout=timeout)
         self.create_db()
         self.commit_interval = commit_interval
         self.counter = 0
@@ -108,10 +112,9 @@ class DB:
         """
         cur = self.con.cursor()
         # available is where status is 0 (AVAILABLE) or 3 (FAILED)
-        # cur.execute(
-        #     f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (0, 3)"
-        # )
-        cur.execute(f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (2)")
+        cur.execute(
+            f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (0, 3)"
+        )
         # select many then pick one to avoid overlaps between threads
         candidates = cur.fetchmany(to_fetch)
         url, uuid, time = random.choice(candidates)  # time = time last updated
@@ -127,6 +130,17 @@ class DB:
         cur = self.con.cursor()
         cur.execute(f"SELECT url, uuid, status FROM blocks WHERE status = {status}")
         return cur.fetchall()
+
+    @timer
+    def clear_timed_out_blocks(self, period=86400):
+        """
+        Finds all blocks where status is in progress, and, if they were last updated > 24hrs ago, set status to failed
+        """
+        cur = self.con.cursor()
+        cur.execute(
+            f"UPDATE blocks SET status = {int(BlockStatus.FAILED)} WHERE status = {int(BlockStatus.IN_PROGRESS)} AND last_updated < {self.now() - period}"
+        )
+        self.con.commit()
 
     @timer
     def get_n_rows(self):
