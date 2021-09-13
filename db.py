@@ -33,7 +33,7 @@ class DB:
     def __init__(
         self,
         path="blocks.sql",
-        commit_interval=250,
+        commit_interval=1000,
         warc_urls_path="warc_urls.txt",
         timeout=30.0,
     ):
