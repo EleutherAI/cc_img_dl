@@ -26,68 +26,77 @@ def parse_args():
 
 args = parse_args()
 API = api.API(host=args.host, port=args.port)
-COUNTER = Value("i", 0)
+COUNTER = 0
 
 
-def process_wats(output_path, debug=False):
-    global COUNTER
-    while True:
-        print(
-            f"\rNum blocks processed locally: {COUNTER.value}", end="",
+class NoAvailableBlocks(Exception):
+    pass
+
+
+def _process_wat(block_id, block_url, out_dir):
+    try:
+        if not block_url.strip():
+            return block_url
+        print(f"Processing block {block_id}")
+        output_name = (
+            block_url.split("/")[3]
+            + "_"
+            + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
         )
-        response = API.get_available_block()
-        if "message" in response:
-            print("\n")
-            print(response["message"])
-            break
-        block_id = response["uuid"]
-        block_url = response["url"]
+        dir_name = block_url.split("/")[1]
+
+        pathlib.Path(f"{out_dir}/{dir_name}/").mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                "./commoncrawl_filter_bin",
+                block_url,
+                f"{out_dir}/{dir_name}/{output_name}".strip(),
+            ],
+            timeout=1200,
+            check=True,
+        )
+        API.mark_block_complete(block_id)
+    except BaseException as e:
+        print(e)
+        print(f"Error processing block {block_id}")
+        API.mark_block_failed(block_id)
+        traceback.print_exc()
+
+
+def process_wats(output_path, processes):
+    global COUNTER
+    n_blocks = processes * 10
+    while True:
         try:
-            if not block_url.strip():
-                return block_url
-
-            if debug:
-                time.sleep(5)
-            else:
-                output_name = (
-                    block_url.split("/")[3]
-                    + "_"
-                    + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
+            with multiprocessing.Pool(args.processes) as p:
+                print(
+                    f"\rNum blocks processed locally: {COUNTER}", end="",
                 )
-                dir_name = block_url.split("/")[1]
-
-                pathlib.Path(f"{output_path}/{dir_name}/").mkdir(
-                    parents=True, exist_ok=True
-                )
-                subprocess.run(
-                    [
-                        "./commoncrawl_filter_bin",
-                        block_url,
-                        f"{output_path}/{dir_name}/{output_name}".strip(),
-                    ],
-                    timeout=1200,
-                    check=True,
-                )
-            API.mark_block_complete(block_id)
-            COUNTER.value += 1
-        except BaseException as e:
-            print(e)
-            print(f"Error processing block {block_id}")
-            API.mark_block_failed(block_id)
+                blocks = API.get_available_blocks(n_blocks)
+                n_blocks = len(blocks)
+                if "message" in blocks:
+                    if blocks["message"] == "no available blocks":
+                        raise NoAvailableBlocks
+                    else:
+                        print(blocks["message"])
+                        print("Sleeping and trying again in 10 seconds")
+                        time.sleep(10)
+                print(f"GOT {len(blocks)} BLOCKS")
+                for block in blocks:
+                    p.apply_async(
+                        _process_wat, args=(block["uuid"], block["url"], output_path)
+                    )
+                    time.sleep(1)
+        except NoAvailableBlocks:
+            print("No more blocks!")
+        except Exception as e:
             traceback.print_exc()
-            break
+        finally:
+            # wait for all processes to complete
+            p.close()
+            p.join()
+            COUNTER += n_blocks
 
 
 if __name__ == "__main__":
-    p = multiprocessing.Pool(args.processes)
-    process = partial(process_wats, output_path=args.out_dir)
-    total_blocks = API.get_block_count()
-    try:
-        for _ in range(args.processes):
-            p.apply_async(process)
-            # stagger the processes
-            time.sleep(1)
-    finally:
-        # wait for all processes to complete
-        p.close()
-        p.join()
+    process_wats(args.out_dir, args.processes)

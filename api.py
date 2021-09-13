@@ -26,8 +26,8 @@ class API:
             self.WORKER_ID = f"{usr}-{shortuuid.uuid()}"
         return self.WORKER_ID
 
-    def get_available_block(self):
-        response = requests.get(f"{self.GET_BLOCK}/?worker_id={self.worker_id()}")
+    def get_available_blocks(self, n):
+        response = requests.get(f"{self.GET_BLOCK}/?worker_id={self.worker_id()}&n={n}")
         return response.json()
 
     def get_block_count(self):

@@ -97,6 +97,22 @@ class DB:
             self.con.commit()
 
     @timer
+    def update_multiple(self, uuids, status, worker_id=None, commit=False):
+        """
+        Updates the status of the row with uuid `uuid` to `status`
+        """
+        cur = self.con.cursor()
+        worker_id_str = "" if worker_id is None else f", worker_id={worker_id}"
+        uuids = [f"'{uuid}'" for uuid in uuids]
+        uuid_str = ",".join(uuids)
+        cur.execute(
+            f"UPDATE blocks SET status = {status}, last_updated = {self.now()}{worker_id_str} WHERE uuid in ({uuid_str})"
+        )
+        self.counter += 1
+        if (self.counter % self.commit_interval == 0) or commit:
+            self.con.commit()
+
+    @timer
     def get_status(self, uuid):
         """
         Gets the status of the row where uuid==`uuid`
@@ -106,9 +122,9 @@ class DB:
         return cur.fetchone()[0]
 
     @timer
-    def get_available_block(self, to_fetch=100):
+    def get_available_blocks(self, n=1):
         """
-        Gets a single block where status is available (or failed, since it needs to be retried)
+        Gets a n blocks where status is available (or failed, since it needs to be retried)
         """
         cur = self.con.cursor()
         # available is where status is 0 (AVAILABLE) or 3 (FAILED)
@@ -116,11 +132,15 @@ class DB:
             f"SELECT url, uuid, last_updated FROM blocks WHERE status IN (0, 3)"
         )
         # select many then pick one to avoid overlaps between threads
+        to_fetch = n * 100
         candidates = cur.fetchmany(to_fetch)
-        url, uuid, time = random.choice(candidates)  # time = time last updated
+        blocks = random.sample(
+            candidates, min(len(candidates), n)
+        )  # time = time last updated
         # update status to 1 (IN_PROGRESS)
-        self.update_status(uuid, 1)
-        return url, uuid, time
+        uuids = [block[1] for block in blocks]
+        self.update_multiple(uuids, 1)
+        return blocks
 
     @timer
     def get_blocks_with_status(self, status):

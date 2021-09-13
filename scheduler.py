@@ -42,17 +42,20 @@ async def shutdown():
 
 # get an available block (or N)
 @app.get("/blocks/get")
-async def get_block(worker_id: str, n: Optional[int] = None):
+async def get_blocks(worker_id: str, n: Optional[int] = 1):
     # get first index where status is AVAILABLE or FAILED
     try:
-        url, uuid, last_updated = DATABASE.get_available_block()
+        blocks = DATABASE.get_available_blocks(n)
     except IndexError as e:
         print(e)
         return {"message": "no blocks available"}
     except sqlite3.OperationalError as e:
         print(e)
         return {"message": "database error"}
-    return {"url": url, "uuid": uuid, "last_updated": last_updated}
+    return [
+        {"url": url, "uuid": uuid, "last_updated": last_updated}
+        for (url, uuid, last_updated) in blocks
+    ]
 
 
 # get total number of blocks
@@ -130,6 +133,6 @@ async def remove_expired_tokens_task():
 if __name__ == "__main__":
     # run uvicorn app
     uvicorn.run(
-        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=2,
+        "scheduler:app", host="0.0.0.0", port=5000, log_level="info", workers=1,
     )
 

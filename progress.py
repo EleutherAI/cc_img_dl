@@ -1,7 +1,8 @@
 from tqdm import tqdm
 from api import API
 
-api = API(host="http://176.9.113.70")
+# http://127.0.0.1:5000/
+api = API(host="http://127.0.0.1")
 total = api.get_block_count()
 pbar = tqdm(total=total)
 last_count = 0
