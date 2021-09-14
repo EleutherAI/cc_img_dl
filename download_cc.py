@@ -105,14 +105,13 @@ def _process_wat(args, out_dir):
 
 def process_wats(output_path, processes):
     global COUNTER
-    n_blocks = processes * 5
     while True:
         try:
             with multiprocessing.Pool(args.processes) as p:
                 print(
                     f"\rNum blocks processed locally: {COUNTER}", end="",
                 )
-                blocks = API.get_available_blocks(n_blocks)
+                blocks = API.get_available_blocks(processes * 5)
                 n_blocks = len(blocks)
                 if "message" in blocks:
                     if blocks["message"] == "no available blocks":
