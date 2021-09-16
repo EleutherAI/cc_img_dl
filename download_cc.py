@@ -82,19 +82,23 @@ def _process_wat(args, out_dir):
             + block_url.split("/")[-1].replace(".warc.wat.gz", ".jsonl.wat.gz")
         )
         dir_name = block_url.split("/")[1]
-
-        pathlib.Path(f"{out_dir}/{dir_name}/").mkdir(parents=True, exist_ok=True)
+        final_out_dir = pathlib.Path(out_dir) / dir_name
+        final_out_dir.mkdir(parents=True, exist_ok=True)
         start = time.time()
         subprocess.run(
             [
                 "./commoncrawl_filter_bin",
                 block_url,
-                f"{out_dir}/{dir_name}/{output_name}".strip(),
+                str(final_out_dir / output_name).strip(),
             ],
             timeout=1200,
             check=True,
         )
         print(f"Finished processing block {block_id} in {time.time() - start} seconds")
+        print(
+            f"Saved block to {pathlib.Path(str(final_out_dir / output_name).strip()).resolve()}"
+        )
+
         return 0
     except BaseException as e:
         print(e)
